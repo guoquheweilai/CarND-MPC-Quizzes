@@ -11,8 +11,8 @@ namespace plt = matplotlibcpp;
 using CppAD::AD;
 
 // TODO: Set N and dt
-size_t N = ? ;
-double dt = ? ;
+size_t N = 10;
+double dt = 0.1;
 
 // This value assumes the model presented in the classroom is used.
 //
@@ -60,6 +60,20 @@ class FG_eval {
     // TODO: Define the cost related the reference state and
     // any anything you think may be beneficial.
 
+  		int t = 0;
+		  // Add state cost
+		  for (t = 0; t < N; t++) {
+			   fg[0] += CppAD::pow(vars[cte_start + t], 2);
+			   fg[0] += CppAD::pow(vars[epsi_start + t], 2);
+			   fg[0] += CppAD::pow(vars[v_start + t], 2);
+		  }
+
+		  // Add actuators cost
+		  for (t = 0; t < N - 1; t++) {
+			   fg[0] += CppAD::pow(vars[delta_start + t], 2);
+			   fg[0] += CppAD::pow(vars[a_start + t], 2);
+		  }
+   
     //
     // Setup Constraints
     //
@@ -79,11 +93,27 @@ class FG_eval {
 
     // The rest of the constraints
     for (int t = 1; t < N; t++) {
-      AD<double> x1 = vars[x_start + t];
+			   // The state at time t+1
+			   AD<double> x_t1 = vars[x_start + t];
+			   AD<double> y_t1 = vars[y_start + t];
+			   AD<double> psi_t1 = vars[psi_start + t];
+			   AD<double> v_t1 = vars[v_start + t];
+			   AD<double> cte_t1 = vars[cte_start + t];
+			   AD<double> epsi_t1 = vars[epsi_start + t];
 
-      AD<double> x0 = vars[x_start + t - 1];
-      AD<double> psi0 = vars[psi_start + t - 1];
-      AD<double> v0 = vars[v_start + t - 1];
+			   // The state at time t
+			   AD<double> x_t0 = vars[x_start + t - 1];
+			   AD<double> y_t0 = vars[y_start + t - 1];
+			   AD<double> psi_t0 = vars[psi_start + t - 1];
+			   AD<double> v_t0 = vars[v_start + t - 1];
+			   AD<double> cte_t0 = vars[cte_start + t - 1];
+			   AD<double> epsi_t0 = vars[epsi_start + t - 1];
+
+			   // The actuators at time t
+			   AD<double> delta_t0 = vars[delta_start + t - 1];
+			   AD<double> a_t0 = vars[a_start + t - 1];
+			   AD<double> f_t0 = x0 * coeffs[1] + coeffs[0];
+			   AD<double> psi_des_t0 = CppAD::atan(coeffs[1]);
 
       // Here's `x` to get you started.
       // The idea here is to constraint this value to be 0.
@@ -93,7 +123,12 @@ class FG_eval {
       // these to the solver.
 
       // TODO: Setup the rest of the model constraints
-      fg[1 + x_start + t] = x1 - (x0 + v0 * CppAD::cos(psi0) * dt);
+			  fg[1 + x_start + t] = x_t1 - (x_t0 + v_t0 * CppAD::cos(psi0) * dt);
+			  fg[1 + y_start + t] = y_t1 - (y_t0 + v_t0 * CppAD::sin(psi0) * dt);
+			  fg[1 + psi_start + t] = psi_t1 - (psi_t0 + v_t0 * delta_t0 / Lf * dt);
+			  fg[1 + v_start + t] = v_t1 - (v_t0 + a_t0 * dt);
+			  fg[1 + cte_start + t] = cte_t1 - ((f_t0 - y_t0) + (v_t0 * CppAD::sin(epsi_t0) * dt));
+			  fg[1 + epsi_start + t] = epsi_t1 - ((psi_t0 - psi_des_t0) + (v_t0 * delta_t0 / Lf * dt));
     }
   }
 };
@@ -263,7 +298,7 @@ int main() {
   ptsy << -1, -1;
 
   // TODO: fit a polynomial to the above x and y coordinates
-  auto coeffs = ? ;
+  auto coeffs = polyfit(ptsx, ptsy, 1);
 
   // NOTE: free feel to play around with these
   double x = -1;
@@ -271,9 +306,9 @@ int main() {
   double psi = 0;
   double v = 10;
   // TODO: calculate the cross track error
-  double cte = ? ;
+  double cte = polyeval(coeffs, x) - y;
   // TODO: calculate the orientation error
-  double epsi = ? ;
+  double epsi = psi - atan(coeffs[1]);
 
   Eigen::VectorXd state(6);
   state << x, y, psi, v, cte, epsi;
